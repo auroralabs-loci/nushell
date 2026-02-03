@@ -1,5 +1,8 @@
 use crate::prompt_update::{
-    POST_PROMPT_MARKER, PRE_PROMPT_MARKER, VSCODE_POST_PROMPT_MARKER, VSCODE_PRE_PROMPT_MARKER,
+    POST_PROMPT_MARKER, PRE_PROMPT_MARKER, PROMPT_KIND_INITIAL, PROMPT_KIND_RIGHT,
+    PROMPT_KIND_SECONDARY, ShellIntegrationMode, VSCODE_POST_PROMPT_MARKER,
+    VSCODE_PRE_PROMPT_MARKER, VSCODE_PROMPT_KIND_INITIAL, VSCODE_PROMPT_KIND_RIGHT,
+    VSCODE_PROMPT_KIND_SECONDARY,
 };
 use nu_protocol::engine::{EngineState, Stack};
 #[cfg(windows)]
@@ -102,6 +105,15 @@ impl NushellPrompt {
     fn default_wrapped_custom_string(&self, str: String) -> String {
         format!("({str})")
     }
+
+    fn shell_integration_mode(&self) -> ShellIntegrationMode {
+        ShellIntegrationMode::from_config(
+            self.shell_integration_osc133,
+            self.shell_integration_osc633,
+            &self.stack,
+            &self.engine_state,
+        )
+    }
 }
 
 impl Prompt for NushellPrompt {
@@ -120,25 +132,15 @@ impl Prompt for NushellPrompt {
                 .to_string()
                 .replace('\n', "\r\n");
 
-            if self.shell_integration_osc633 {
-                if self
-                    .stack
-                    .get_env_var(&self.engine_state, "TERM_PROGRAM")
-                    .and_then(|v| v.as_str().ok())
-                    == Some("vscode")
-                {
-                    // We're in vscode and we have osc633 enabled
-                    format!("{VSCODE_PRE_PROMPT_MARKER}{prompt}{VSCODE_POST_PROMPT_MARKER}").into()
-                } else if self.shell_integration_osc133 {
-                    // If we're in VSCode but we don't find the env var, but we have osc133 set, then use it
-                    format!("{PRE_PROMPT_MARKER}{prompt}{POST_PROMPT_MARKER}").into()
-                } else {
-                    prompt.into()
+            match self.shell_integration_mode() {
+                ShellIntegrationMode::Osc633 => {
+                    format!("{VSCODE_PRE_PROMPT_MARKER}{VSCODE_PROMPT_KIND_INITIAL}{prompt}{VSCODE_POST_PROMPT_MARKER}").into()
                 }
-            } else if self.shell_integration_osc133 {
-                format!("{PRE_PROMPT_MARKER}{prompt}{POST_PROMPT_MARKER}").into()
-            } else {
-                prompt.into()
+                ShellIntegrationMode::Osc133 => {
+                    format!("{PRE_PROMPT_MARKER}{PROMPT_KIND_INITIAL}{prompt}{POST_PROMPT_MARKER}")
+                        .into()
+                }
+                ShellIntegrationMode::None => prompt.into(),
             }
         }
     }
@@ -148,11 +150,18 @@ impl Prompt for NushellPrompt {
             prompt_string.replace('\n', "\r\n").into()
         } else {
             let default = DefaultPrompt::default();
-            default
+            let prompt = default
                 .render_prompt_right()
                 .to_string()
-                .replace('\n', "\r\n")
-                .into()
+                .replace('\n', "\r\n");
+
+            match self.shell_integration_mode() {
+                ShellIntegrationMode::Osc633 => {
+                    format!("{VSCODE_PROMPT_KIND_RIGHT}{prompt}").into()
+                }
+                ShellIntegrationMode::Osc133 => format!("{PROMPT_KIND_RIGHT}{prompt}").into(),
+                ShellIntegrationMode::None => prompt.into(),
+            }
         }
     }
 
@@ -184,11 +193,18 @@ impl Prompt for NushellPrompt {
     }
 
     fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
-        match &self.default_multiline_indicator {
-            Some(indicator) => indicator,
+        let indicator = match &self.default_multiline_indicator {
+            Some(indicator) => indicator.as_str(),
             None => "::: ",
+        };
+
+        match self.shell_integration_mode() {
+            ShellIntegrationMode::Osc633 => {
+                format!("{VSCODE_PROMPT_KIND_SECONDARY}{indicator}").into()
+            }
+            ShellIntegrationMode::Osc133 => format!("{PROMPT_KIND_SECONDARY}{indicator}").into(),
+            ShellIntegrationMode::None => indicator.into(),
         }
-        .into()
     }
 
     fn render_prompt_history_search_indicator(
