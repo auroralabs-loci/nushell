@@ -315,3 +315,51 @@ fn commandstring_populates_config_record() {
 
     assert_eq!(actual.out, "true");
 }
+
+#[test]
+fn test_custom_history_path() {
+    Playground::setup("custom_history_path", |_, playground| {
+        let custom_history = playground.cwd().join("history.txt");
+
+        let config = playground.cwd().join("config.nu");
+        std::fs::write(
+            &config,
+            format!(
+                r#"$env.config.history.path = "{}""#,
+                custom_history.display()
+            ),
+        )
+        .unwrap();
+
+        let _ = run(playground, "echo hello");
+
+        let actual_path = run(playground, "$nu.env.config.history.path");
+        assert_eq!(actual_path, adjust_canonicalization(&custom_history));
+
+        let history_content =
+            std::fs::read_to_string(&custom_history).expect("history file should exist");
+        assert!(
+            history_content.contains("echo hello"),
+            "History file does not contain command"
+        );
+    });
+}
+
+#[test]
+fn test_disable_history() {
+    Playground::setup("disable_history", |_, playground| {
+        let config_file = playground.cwd().join("config.nu");
+        std::fs::write(&config_file, r#"$env.config.history.path = "/dev/null""#).unwrap();
+
+        let _ = run(playground, "echo hello");
+
+        let actual = run(playground, "$nu.env.config.history.path");
+        assert_eq!(actual, "/dev/null");
+
+        let history_file = playground.cwd().join("history.txt");
+        assert!(
+            !history_file.exists(),
+            "History file should not exist when disabled"
+        );
+    });
+}
