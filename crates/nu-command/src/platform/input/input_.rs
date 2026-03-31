@@ -287,4 +287,22 @@ mod tests {
         assert_eq!(line_editor.current_buffer_contents(), "");
         assert_eq!(line_editor.current_insertion_point(), 0);
     }
+
+    #[test]
+    fn reedline_default_prefills_editable_buffer() {
+        let mut line_editor = Reedline::create();
+        prefill_reedline_buffer(&mut line_editor, "foobar.txt");
+
+        assert_eq!(line_editor.current_buffer_contents(), "foobar.txt");
+        assert_eq!(line_editor.current_insertion_point(), "foobar.txt".len());
+    }
+
+    #[test]
+    fn reedline_default_empty_does_not_prefill() {
+        let mut line_editor = Reedline::create();
+        prefill_reedline_buffer(&mut line_editor, "");
+
+        assert_eq!(line_editor.current_buffer_contents(), "");
+        assert_eq!(line_editor.current_insertion_point(), 0);
+    }
 }
